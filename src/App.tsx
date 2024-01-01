@@ -4,6 +4,7 @@ import Page1 from "./components/page1"
 import Page2 from "./components/page2"
 import Nav from "./components/nav"
 import { useState } from "react"
+import Page3 from "./components/page3"
 
 export default function App() {
   console.log(`App rendered`)
@@ -44,6 +45,12 @@ export default function App() {
                   appLabel={appLabel}
                   handleAppLabelUpdate={handleAppLabelUpdate}
                 />
+              }
+            />
+            <Route
+              path="page3"
+              element={
+                <Page3 />
               }
             />
             <Route index element={<Navigate to="page1" />} />
