@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import LoadingAnimation from "../loading-animation"
+import { fetchAvailableCurrencies, fetchConversion } from "./currency-tools"
 
 export default function CurrencyConverter2() {
   const [currencies, setCurrencies] = useState<
@@ -23,7 +24,6 @@ export default function CurrencyConverter2() {
   useEffect(() => {
     async function loadCurrencies() {
       const allCurrencies = await fetchAvailableCurrencies()
-      await waitSeconds(3)
       setCurrencies(allCurrencies)
       setIsCallingAPI(false)
     }
@@ -42,7 +42,6 @@ export default function CurrencyConverter2() {
         toCurrency,
         amount
       )
-      await waitSeconds(1)
       setConversionResult(conversionResult)
       setIsCallingAPI(false)
       setConversionRequested(false)
@@ -124,46 +123,6 @@ export default function CurrencyConverter2() {
       )}
     </div>
   )
-}
-
-async function fetchAvailableCurrencies() {
-  const CURRENCY_API_KEY = import.meta.env.VITE_CURRENCY_API_KEY
-  const response = await fetch(
-    `https://api.getgeoapi.com/v2/currency/list?api_key=${CURRENCY_API_KEY}`
-  )
-  if (!response.ok) {
-    throw new Error("Failed to get currencies.")
-  } else {
-    const data = await response.json()
-    return data.currencies as Record<string, string>
-  }
-}
-
-async function fetchConversion(
-  from: string,
-  to: string,
-  amount: number
-): Promise<ConversionResult> {
-  const CURRENCY_API_KEY = import.meta.env.VITE_CURRENCY_API_KEY
-  const response = await fetch(
-    `https://api.getgeoapi.com/v2/currency/convert?api_key=${CURRENCY_API_KEY}&from=${from}&to=${to}&amount=${amount}&format=json`
-  )
-  if (!response.ok) {
-    throw new Error("Failed to get currencies.")
-  } else {
-    const data = await response.json()
-    const result: ConversionResult = {
-      amount: parseFloat(data.rates[to].rate_for_amount),
-      rate: parseFloat(data.rates[to].rate),
-    }
-    return result
-  }
-}
-
-async function waitSeconds(seconds: number) {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(true), seconds * 1000)
-  })
 }
 
 type ConversionResult = {
