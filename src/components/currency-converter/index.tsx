@@ -1,64 +1,54 @@
-import { useEffect, useState } from "react"
+import { useEffect, useReducer } from "react"
 import LoadingAnimation from "../loading-animation"
+import { fetchAvailableCurrencies, fetchConversion } from "./currency-tools"
+import type {
+  CurrencyConverterState,
+  CurrencyConverterAction,
+} from "./currency-tools"
+
+const initialState: CurrencyConverterState = {
+  isCallingAPI: true,
+  fromCurrency: "USD",
+  toCurrency: "TRY",
+  amount: 100,
+  conversionResult: undefined,
+  conversionRequested: false,
+  currencies: {},
+}
 
 export default function CurrencyConverter() {
-  const [currencies, setCurrencies] = useState<
-    Record<string, string> | undefined
-  >(undefined)
-  const [isCallingAPI, setIsCallingAPI] = useState(false)
-  const [fromCurrency, setFromCurrency] = useState("USD")
-  const [toCurrency, setToCurrency] = useState("TRY")
-  const [amount, setAmount] = useState(100)
-  const [conversionResult, setConversionResult] = useState<
-    ConversionResult | undefined
-  >(undefined)
-  const [conversionRequested, setConversionRequested] = useState(false)
+  const [state, dispatch] = useReducer(reducer, initialState)
 
   const handleConvertClick = () => {
-    if (!isCallingAPI && !conversionRequested) {
-      setConversionRequested(true)
+    if (!state.isCallingAPI && !state.conversionRequested) {
+      dispatch({ type: "conversion-submitted" })
     }
   }
 
   useEffect(() => {
     async function loadCurrencies() {
       const allCurrencies = await fetchAvailableCurrencies()
-      await waitSeconds(3)
-      setCurrencies(allCurrencies)
-      setIsCallingAPI(false)
+      dispatch({ type: "currencies-fetched", currencies: allCurrencies })
     }
-
-    if (!currencies && !isCallingAPI) {
-      loadCurrencies()      
-      setIsCallingAPI(true)
-    }
-  })
+    loadCurrencies()
+  }, [])
 
   useEffect(() => {
     async function convert() {
-      setIsCallingAPI(true)
       const conversionResult = await fetchConversion(
-        fromCurrency,
-        toCurrency,
-        amount
+        state.fromCurrency,
+        state.toCurrency,
+        state.amount
       )
-      await waitSeconds(1)
-      setConversionResult(conversionResult)
-      setIsCallingAPI(false)
-      setConversionRequested(false)
+      dispatch({ type: "conversion-fetched", result: conversionResult })
     }
 
-    if (conversionRequested && !isCallingAPI) {
-      setConversionResult(undefined)
+    if (state.conversionRequested) {
       convert()
     }
-  }, [conversionRequested])
+  }, [state.conversionRequested])
 
-  useEffect(() => {
-    setConversionResult(undefined)
-  }, [fromCurrency, toCurrency, amount])
-
-  if (!currencies || isCallingAPI) {
+  if (state.isCallingAPI) {
     return (
       <div className="bg-neutral-100 rounded">
         <LoadingAnimation />
@@ -73,14 +63,20 @@ export default function CurrencyConverter() {
           <div>From:</div>
           <select
             className="border border-black p-2"
-            value={fromCurrency}
-            onChange={(e) => setFromCurrency(e.target.value)}
+            value={state.fromCurrency}
+            onChange={(e) =>
+              dispatch({
+                type: "currency-changed",
+                target: "from",
+                newCurrency: e.target.value,
+              })
+            }
           >
-            {Object.keys(currencies)
+            {Object.keys(state.currencies)
               .sort()
               .map((currencySymbol) => (
                 <option key={currencySymbol} value={currencySymbol}>
-                  {currencySymbol}: {currencies[currencySymbol]}
+                  {currencySymbol}: {state.currencies[currencySymbol]}
                 </option>
               ))}
           </select>
@@ -89,14 +85,20 @@ export default function CurrencyConverter() {
           <div>To:</div>
           <select
             className="border border-black p-2"
-            value={toCurrency}
-            onChange={(e) => setToCurrency(e.target.value)}
+            value={state.toCurrency}
+            onChange={(e) =>
+              dispatch({
+                type: "currency-changed",
+                target: "to",
+                newCurrency: e.target.value,
+              })
+            }
           >
-            {Object.keys(currencies)
+            {Object.keys(state.currencies)
               .sort()
               .map((currencySymbol) => (
                 <option key={currencySymbol} value={currencySymbol}>
-                  {currencySymbol}: {currencies[currencySymbol]}
+                  {currencySymbol}: {state.currencies[currencySymbol]}
                 </option>
               ))}
           </select>
@@ -108,65 +110,74 @@ export default function CurrencyConverter() {
             step=".01"
             min={0}
             type="number"
-            value={amount}
-            onChange={(e) => setAmount(parseFloat(e.target.value))}
+            value={state.amount}
+            onChange={(e) =>
+              dispatch({
+                type: "amount-set",
+                newAmount: parseFloat(e.target.value),
+              })
+            }
           />
         </div>
         <div>
           <button onClick={handleConvertClick}>Convert</button>
         </div>
       </div>
-      {conversionResult && (
+      {state.conversionResult && (
         <div className="mt-5 border-2 border-neutral-400 border-dashed bg-slate-200 rounded p-4">
-          {amount} {fromCurrency} = {conversionResult.amount} {toCurrency} (rate
-          is {conversionResult.rate})
+          {state.amount} {state.fromCurrency} = {state.conversionResult.amount}{" "}
+          {state.toCurrency} (rate is {state.conversionResult.rate})
         </div>
       )}
     </div>
   )
 }
 
-async function fetchAvailableCurrencies() {
-  const CURRENCY_API_KEY = import.meta.env.VITE_CURRENCY_API_KEY
-  const response = await fetch(
-    `https://api.getgeoapi.com/v2/currency/list?api_key=${CURRENCY_API_KEY}`
-  )
-  if (!response.ok) {
-    throw new Error("Failed to get currencies.")
-  } else {
-    const data = await response.json()
-    return data.currencies as Record<string, string>
-  }
-}
-
-async function fetchConversion(
-  from: string,
-  to: string,
-  amount: number
-): ConversionResult {
-  const CURRENCY_API_KEY = import.meta.env.VITE_CURRENCY_API_KEY
-  const response = await fetch(
-    `https://api.getgeoapi.com/v2/currency/convert?api_key=${CURRENCY_API_KEY}&from=${from}&to=${to}&amount=${amount}&format=json`
-  )
-  if (!response.ok) {
-    throw new Error("Failed to get currencies.")
-  } else {
-    const data = await response.json()
-    const result: ConversionResult = {
-      amount: parseFloat(data.rates[to].rate_for_amount),
-      rate: parseFloat(data.rates[to].rate),
+function reducer(
+  previousState: CurrencyConverterState,
+  action: CurrencyConverterAction
+) {
+  let nextState: CurrencyConverterState
+  if (action.type === "currencies-fetched") {
+    nextState = {
+      ...previousState,
+      currencies: action.currencies,
+      isCallingAPI: false,
     }
-    return result
+  } else if (action.type === "currency-changed" && action.target === "from") {
+    nextState = {
+      ...previousState,
+      fromCurrency: action.newCurrency,
+      conversionResult: undefined,
+    }
+  } else if (action.type === "currency-changed" && action.target === "to") {
+    nextState = {
+      ...previousState,
+      toCurrency: action.newCurrency,
+      conversionResult: undefined,
+    }
+  } else if (action.type === "amount-set") {
+    nextState = {
+      ...previousState,
+      amount: action.newAmount,
+      conversionResult: undefined,
+    }
+  } else if (action.type === "conversion-submitted") {
+    nextState = {
+      ...previousState,
+      isCallingAPI: true,
+      conversionRequested: true,
+      conversionResult: undefined,
+    }
+  } else if (action.type === "conversion-fetched") {
+    nextState = {
+      ...previousState,
+      isCallingAPI: false,
+      conversionRequested: false,
+      conversionResult: action.result,
+    }
+  } else {
+    throw Error("Unknown action.")
   }
-}
-
-async function waitSeconds(seconds:number) {
-    return new Promise((resolve) => {
-        setTimeout(() => resolve(true), seconds * 1000)
-    })
-}
-
-type ConversionResult = {
-  amount: number
-  rate: number
+  return nextState
 }
